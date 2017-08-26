@@ -1,0 +1,310 @@
+---
+title: "Final Report LClub"
+author: "Italo Sayan"
+date: "8/2/2017"
+output: html_document
+---
+# Describing and predicting loan default on the lending club dataset
+#### The loans were issued from 2007 to 2015
+
+```{r}
+install.packages("readr")
+install.packages("VIM")
+install.packages("caret")
+install.packages("randomForest")
+install.packages("DescTools")
+install.packages("psych")
+install.packages("corrplot")
+```
+
+### Loading the data
+```{r, message=FALSE, warning=FALSE}
+library(readr)
+dataLC <- read_csv("~/datalendingclub.csv")
+
+```
+
+### Formatting the loan status variable
+```{r}
+
+dataLC <- dataLC[!(dataLC$loan_status == "Current"),]
+
+bad_indicators <- c("Charged Off",
+                    "Default",
+                    "Does not meet the credit policy. Status:Charged Off",
+                    "In Grace Period", 
+                    "Default Receiver", 
+                    "Late (16-30 days)",
+                    "Late (31-120 days)")
+
+dataLC$loan_status[dataLC$loan_status %in% bad_indicators] <- 'Default'
+dataLC$loan_status[dataLC$loan_status == 'Does not meet the credit policy. Status:Fully Paid'] <- 'Fully Paid'
+dataLC <- dataLC[!dataLC$loan_status == 'Issued',]
+rm(bad_indicators)
+```
+
+### Checking for missing values
+```{r}
+library(VIM)
+aggr(dataLC, prop= FALSE, numbers = TRUE)
+```
+
+### Cleaning missing values
+```{r}
+# Remove variables with more than 20% of mising values
+dataLC <- dataLC[!(colMeans(is.na(dataLC)) > 0.2)]
+
+# Data eliminated for:
+# Being constant for all values.
+# Being imposible to know when the loan in issued
+# Irrelevant : URL, id , member id
+
+dataLC$id <-NULL
+dataLC$url <- NULL
+dataLC$desc <- NULL
+dataLC$title <- NULL
+dataLC$issue_d <- NULL
+dataLC$sub_grade <- NULL
+dataLC$member_id <- NULL
+dataLC$out_prncp <- NULL
+dataLC$emp_title <- NULL
+dataLC$revol_bal <- NULL
+dataLC$recoveries <- NULL
+dataLC$addr_state <- NULL
+dataLC$pymnt_plan <- NULL
+dataLC$policy_code <- NULL
+dataLC$total_pymnt <- NULL
+dataLC$funded_amnt <- NULL
+dataLC$policy_code <- NULL
+dataLC$last_pymnt_d <- NULL
+dataLC$next_pymnt_d <- NULL
+dataLC$out_prncp_inv <- NULL
+dataLC$total_rec_int <- NULL
+dataLC$last_pymnt_amnt <- NULL
+dataLC$total_pymnt_inv <- NULL
+dataLC$total_rec_prncp <- NULL
+dataLC$funded_amnt_inv <- NULL
+dataLC$application_type <- NULL
+dataLC$earliest_cr_line <- NULL
+dataLC$earliest_cr_line <- NULL
+dataLC$total_rec_late_fee <- NULL
+dataLC$last_credit_pull_d <- NULL
+dataLC$initial_list_status <- NULL
+dataLC$collection_recovery_fee <- NULL
+dataLC$verification_status_joint <- NULL
+dataLC$collections_12_mths_ex_med <- NULL
+dataLC$verification_status <- NULL
+
+```
+
+### Formatting the variables
+```{r}
+# Formatting each of the variables that will be used in the model
+
+# Term
+# Replace months word and making the variable numeric
+dataLC$term <- as.numeric(gsub(" months","", dataLC$term))
+
+# Grade
+# Turning it to a factor variable
+dataLC$grade <- factor(dataLC$grade)
+
+# Employment length 
+# It has multiple issues
+dataLC$emp_length[1:100]
+# First if employment length is less than 1 year replace it with 0.5
+dataLC$emp_length <- ifelse(dataLC$emp_length == '< 1 year', 0.5 ,dataLC$emp_length)
+# Then if employment length is more than 10 years use a random number between 10:19
+# The way of handling emp_length can vary
+dataLC$emp_length <- ifelse(dataLC$emp_length == "10+ years",sample(10:19, nrow(dataLC[dataLC$emp_length == "10+ years",]),replace = TRUE ),dataLC$emp_length)
+# Remove the n/a with 0 employment length
+dataLC$emp_length <-gsub("n/a",0,dataLC$emp_length)
+# Eliminate any left words using regex
+dataLC$emp_length <- gsub('[ a-z]','',dataLC$emp_length)
+# Making employment length a numeric variable
+dataLC$emp_length <- as.numeric(dataLC$emp_length)
+
+# Remove the "OTHER" category from home ownership
+table(dataLC$home_ownership)
+dataLC <- dataLC[!(dataLC$home_ownership == "OTHER"),]
+dataLC$home_ownership <- factor(dataLC$home_ownership) 
+
+#Purpose
+dataLC$purpose <- factor(dataLC$purpose)
+
+#Loan Status
+dataLC$loan_status <- factor(dataLC$loan_status)
+
+#Zip Code
+dataLC$zip_code <- gsub('xx', '', dataLC$zip_code)
+dataLC$zip_code <- as.integer(dataLC$zip_code)
+
+#Dti: monthly payments divided by monthly income
+dataLC$dti <- as.numeric(dataLC$dti)
+
+#Delinquencies in 2yrs
+dataLC$delinq_2yrs <- as.integer(dataLC$delinq_2yrs)
+
+#Inq_last_6mths
+dataLC$inq_last_6mths <- as.integer(dataLC$inq_last_6mths)
+
+#open_acc
+dataLC$open_acc <- as.integer(dataLC$open_acc)
+
+#pub_rec
+dataLC$pub_rec <- as.integer(dataLC$pub_rec)
+
+#total_acc
+dataLC$total_acc <- as.integer(dataLC$total_acc)
+
+#Annual Income and final cleaning 
+dataLC <- dataLC[complete.cases(dataLC$annual_inc),]
+dataLC <- dataLC[complete.cases(dataLC),]
+dataLC$annual_inc <- as.numeric(dataLC$annual_inc)
+
+aggr(dataLC, prop= FALSE, numbers = TRUE)
+
+```
+
+
+```{r}
+str(dataLC)
+```
+
+### Exploration
+```{r, message=FALSE, warning=FALSE}
+
+library(DescTools)
+#Analizing annual income
+Desc(dataLC$annual_inc, main = "Annual income distribution",plotit = FALSE)
+```
+```{r}
+barplot(table(dataLC$annual_inc))
+```
+
+```{r}
+#Analizing loan amounts
+Desc(dataLC$loan_amnt, main = "Loan amount distribution", plotit = TRUE)
+```
+
+```{r}
+#Analizing loan status
+Desc(dataLC$loan_status,main = "Loan status frequency" ,plotit = T)
+```
+
+```{r}
+#Interest rate distribution
+Desc(dataLC$int_rate ,main = "Interest rate distrbution" ,plotit = T)
+```
+
+```{r}
+#Loan Grade graph
+Desc(dataLC$grade, main = "Loan grades", plotit = TRUE)
+```
+
+### Comparative statistics between defaulted and paid loans
+
+```{r, message=FALSE, warning=FALSE}
+library(psych)
+describeBy(dataLC[,c('loan_amnt','int_rate','annual_inc','emp_length')], group=dataLC$loan_status)
+
+```
+
+### Correlation between varibles
+```{r}
+#function that filters numberic variables
+getNumericColumns<-function(t){
+    tn = sapply(t,function(x){is.numeric(x)})
+    return(names(tn)[which(tn)])
+}
+library(corrplot)
+#correlation of numeric variables
+corrplot(cor(dataLC[getNumericColumns(dataLC)],use="na.or.complete"))
+```
+
+### Modelling how grade is determined
+
+```{r}
+#logistic regression
+set.seed(2)
+
+train <- as.vector(sample(1:nrow(dataLC), nrow(dataLC)/3))
+
+glm.grade <- lm(as.numeric(dataLC$grade) ~  term + emp_length + home_ownership + annual_inc + purpose + delinq_2yrs + revol_util , data=dataLC ,subset=train)
+summary(glm.grade)
+```
+
+
+```{r}
+#Adjusted R-squared:  0.3462
+glm.int <- lm(dataLC$int_rate ~  grade , data=dataLC ,subset=train)
+summary(glm.int)
+```
+Grade clearly determines interest rate
+Adjusted R-squared:  0.904
+
+### Logistic Regression
+```{r}
+set.seed(2)
+
+train <- as.vector(sample(1:nrow(dataLC), nrow(dataLC)/3))
+
+temp <- model.matrix(loan_status~ 0+ ., data=dataLC)
+
+loan_status <- dataLC$loan_status == 'Default'
+
+dataLCLog <- as.data.frame(cbind(loan_status,temp))
+
+glm.fit=glm(loan_status ~.,data=dataLCLog,family=binomial,subset=train)
+
+summary(glm.fit)
+```
+
+### Low Sensitivity Logistic Regression Model
+```{r, message=FALSE, warning=FALSE}
+
+library(caret)
+glm.probs=predict(glm.fit,newdata=dataLCLog[-train,],type="response")
+glm.pred=ifelse(glm.probs>0.5,"Default","Fully Paid")
+
+groundtrue <- dataLC$loan_status[-train]
+
+confusionMatrix(table(glm.pred,groundtrue))
+```
+### High Sensitivity Logistic Regression Model
+```{r}
+
+glm.pred=ifelse(glm.probs>0.2,"Default","Fully Paid")
+
+confusionMatrix(table(glm.pred,groundtrue))
+```
+### Random Forest
+
+```{r, message=FALSE, warning=FALSE}
+str(dataLC)
+
+library(randomForest)
+rf.lendingclub <- randomForest(loan_status~.,data=dataLC , subset=train , mtry=4, importance =TRUE , type ='classification')
+
+prediction.ontest.rf = predict(rf.lendingclub ,newdata=dataLC[-train ,],type="prob")
+glm.rf.pred = ifelse (prediction.ontest.rf[,'Default'] > 0.5,"Default","Fully Paid")
+groundtrue <- dataLC$loan_status[-train]
+confusionMatrix(table(glm.rf.pred, groundtrue))
+```
+
+```{r}
+importance (rf.lendingclub)
+```
+### High sentivity random forest model
+```{r}
+
+glm.rf.pred = ifelse (prediction.ontest.rf[,'Default']>0.2,"Default","Fully Paid")
+
+confusionMatrix(table(glm.rf.pred, groundtrue))
+```
+
+Conclusion:
+
+It is possible to use modern machine learning models to predict loan default. Random forest are slightly more effective than logistic regression . Altering the probability threeshold from 0.5 to 0.2 increased the detection of defaulted loans from 5503 to 35764 in the case of random forest. It is possible to do this because predicting fully paid loans as defaulted is less risky than predicting defaulted loans as paid.
+
+In order to increase the prediction power of the models 2 extension can be made. Joining zip code with census data and conducting TF-IDF on loan description text to identify relevant keywords The work of Shunpo Chang and others should be used as a guide http://cs229.stanford.edu/proj2015/199_report.pdf
