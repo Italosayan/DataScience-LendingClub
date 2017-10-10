@@ -3,7 +3,6 @@ Who is going to pay their debt? How can you differentiate defaulters? Which are 
 
 [Data set](https://www.lendingclub.com/info/download-data.action)
 
-
 [D3 visualization](https://bl.ocks.org/italosayan/aa0983474cffa3458485cd3eda3afbf9)
 
-Analysis is on the HTML and Rmd file.
+[Analysis](https://github.com/Italosayan/DataScience-LendingClub/blob/master/Livedemo%20(1).Rmd)
