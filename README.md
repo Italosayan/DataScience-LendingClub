@@ -1,5 +1,5 @@
 # DataScience-LendingClub
-Who is going to pay their debt? How can you differentiate defaulters? Which are the most important features? Using logistic regresssion and decision trees we analyzed the lending data set to find the most important predictors of a sucessful loan.
+Who is going to pay their debt? How can you differentiate defaulters? Which are the most important features? Using logistic regresssion and decision trees we analyzed the lending club data set to find the most important predictors of a sucessful loan.
 
 [Data set](https://www.lendingclub.com/info/download-data.action)
 
